@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <style>
+    body { 
+      margin: 0; 
+      background: #000; 
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    #upload {
+      margin: 10px;
+      font-size: 18px;
+    }
+
+    #container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      touch-action: none; /* important for iPhone */
+    }
+  </style>
+</head>
+<body>
+
+<input type="file" id="upload" accept="image/*">
+
+<div id="container">
+  <canvas id="imageCanvas"></canvas>
+  <canvas id="touchCanvas"></canvas>
+</div>
+
+<script>
+const upload = document.getElementById("upload");
+const imgCanvas = document.getElementById("imageCanvas");
+const touchCanvas = document.getElementById("touchCanvas");
+
+const imgCtx = imgCanvas.getContext("2d");
+const touchCtx = touchCanvas.getContext("2d");
+
+let recordedClicks = [];
+let lastTapTime = 0;
+let lastFingerCount = 0;
+
+let img = new Image();
+let scale = 1;    // how much the image is scaled to fit screen
+let offsetX = 0;  // center alignment offset
+let offsetY = 0;
+
+// Resize canvas to full screen
+function resizeCanvas() {
+  imgCanvas.width = window.innerWidth;
+  imgCanvas.height = window.innerHeight;
+  touchCanvas.width = window.innerWidth;
+  touchCanvas.height = window.innerHeight;
+}
+
+resizeCanvas();
+window.onresize = resizeCanvas;
+
+upload.onchange = e => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  img.src = URL.createObjectURL(file);
+
+  img.onload = () => {
+    resizeCanvas();
+
+    // Calculate scale to fit entire screen
+    const scaleX = imgCanvas.width / img.width;
+    const scaleY = imgCanvas.height / img.height;
+    scale = Math.max(scaleX, scaleY);
+
+    const newW = img.width * scale;
+    const newH = img.height * scale;
+
+    offsetX = (imgCanvas.width - newW) / 2;
+    offsetY = (imgCanvas.height - newH) / 2;
+
+    // Draw scaled image centered
+    imgCtx.clearRect(0, 0, imgCanvas.width, imgCanvas.height);
+    imgCtx.drawImage(img, offsetX, offsetY, newW, newH);
+
+    // Reset clicks
+    recordedClicks = [];
+    touchCtx.clearRect(0,0,touchCanvas.width,touchCanvas.height);
+
+    // Hide upload button
+    upload.style.display = "none";
+  };
+};
+
+// Convert touch to correct coordinates inside scaled background
+function getPos(e) {
+  const rect = imgCanvas.getBoundingClientRect();
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+  const x = (clientX - rect.left - offsetX);
+  const y = (clientY - rect.top - offsetY);
+
+  return { x, y };
+}
+
+function drawDot(x, y) {
+  touchCtx.beginPath();
+  touchCtx.arc(x, y, 10, 0, Math.PI*2);
+  touchCtx.fillStyle = "rgba(255, 0, 0, 0.6)";
+  touchCtx.fill();
+}
+
+// Record taps without drawing
+touchCanvas.addEventListener("touchstart", e => {
+  const { x, y } = getPos(e);
+  recordedClicks.push({ x, y });
+
+  const now = Date.now();
+  const fingers = e.touches.length;
+
+  // Detect two-finger double-tap
+  if (fingers === 2 && lastFingerCount === 2 && (now - lastTapTime) < 300) {
+    revealClicks();
+  }
+
+  lastTapTime = now;
+  lastFingerCount = fingers;
+}, { passive: false });
+
+function revealClicks() {
+  touchCtx.clearRect(0,0,touchCanvas.width,touchCanvas.height);
+  recordedClicks.forEach(p => drawDot(p.x, p.y));
+}
+</script>
+
+</body>
+</html>
